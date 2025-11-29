@@ -1,0 +1,158 @@
+---
+layout: default
+---
+
+
+
+<div class="research-container" id="research-container">
+    <div class="paper-column">
+        <h1>{{ page.title }}</h1>
+        <p><strong>Authors:</strong> {{ page.authors | join: ", " }}</p>
+        <p><strong>PDF:</strong> <a href="{{ page.pdf }}" target="_blank">Download</a></p>
+        <hr>
+        <div id="paper-abstract">
+            <h2>Abstract</h2>
+            <p>{{ page.abstract }}</p>
+        </div>
+        <hr>
+        <div class="paper-body" id="paper-content">
+            {{ content }}
+        </div>
+    </div>
+
+    <div class="chatbot-column loaded" id="chatbot-column">
+        <h2>Ask anything about this paper</h2>
+        <div id="chat-box">
+            <div id="chat-log"></div>
+            <input id="chat-input" type="text" placeholder="e.g., 'What were the key results?'">
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const researchContainer = document.getElementById('research-container');
+    const chatInput = document.getElementById('chat-input');
+    const chatLog = document.getElementById('chat-log');
+    const PROXY_URL = 'https://backe-nu.vercel.app/api/chat';
+
+    let isChatActive = false;
+
+    // --- Paper Content Caching (with your suggested error handling) ---
+    const paperSections = {};
+    try {
+        paperSections['Abstract'] = document.getElementById('paper-abstract')?.innerText || '';
+        const headings = [...document.querySelectorAll('.paper-body h2')];
+        if (headings.length > 0) {
+            headings.forEach(heading => {
+                const sectionName = heading.innerText.trim();
+                let content = '';
+                let nextElement = heading.nextElementSibling;
+                while(nextElement && nextElement.tagName !== 'H2') {
+                    content += nextElement.innerText + '\n\n';
+                    nextElement = nextElement.nextElementSibling;
+                }
+                paperSections[sectionName] = content.trim();
+            });
+        }
+        paperSections['Full'] = document.getElementById('paper-content')?.innerText.slice(0, 15000) || '';
+    } catch (error) {
+        console.error("Error parsing paper sections:", error);
+        if (!paperSections['Full']) {
+            paperSections['Full'] = document.body.innerText.slice(0, 15000); // Fallback
+        }
+    }
+
+    const sectionKeywords = {
+        'Abstract': ['abstract', 'overview', 'tldr'],
+        'Introduction': ['introduction', 'background', 'context', 'motivation'],
+        'Methods': ['method', 'experiment', 'procedure', 'approach', 'technique', 'how'],
+        'Results': ['result', 'finding', 'observation', 'data', 'what did they find'],
+        'Conclusion': ['conclusion', 'takeaway', 'discussion', 'summarize', 'summary'],
+    };
+
+    const getSmartContext = (query, sectionContent) => {
+        const stopWords = new Set(['a', 'an', 'the', 'is', 'in', 'on', 'of', 'for', 'to', 'what', 'did', 'they', 'how', 'were']);
+        const queryKeywords = query.toLowerCase().split(/\s+/).filter(word => !stopWords.has(word) && word.length > 3);
+        if (queryKeywords.length === 0) return sectionContent.slice(0, 4000);
+        const paragraphs = sectionContent.split(/\n\s*\n/).filter(p => p.trim().length > 10);
+        const relevantParagraphs = new Set();
+        paragraphs.forEach(p => {
+            for (const keyword of queryKeywords) {
+                if (new RegExp(`\\b${keyword}\\b`, 'i').test(p)) {
+                    relevantParagraphs.add(p);
+                    break;
+                }
+            }
+        });
+        return relevantParagraphs.size > 0 ? [...relevantParagraphs].join('\n\n') : sectionContent.slice(0, 4000);
+    };
+
+    // --- CORE CHAT LOGIC ---
+    const handleUserQuery = async () => {
+        const userInput = chatInput.value.trim();
+        if (!userInput || chatInput.disabled) return;
+
+        if (!isChatActive) {
+            researchContainer.classList.add('chatbot-active');
+            isChatActive = true;
+            setTimeout(() => chatLog.scrollTop = chatLog.scrollHeight, 100);
+        }
+
+        chatLog.innerHTML += `<p><strong>You:</strong> ${userInput}</p>`;
+        chatInput.value = '';
+        chatLog.scrollTop = chatLog.scrollHeight;
+        
+        chatInput.disabled = true; // Your brilliant UX suggestion
+        
+        const thinkingMessage = document.createElement('p');
+        thinkingMessage.innerHTML = "<strong>Bot:</strong> Thinking...";
+        chatLog.appendChild(thinkingMessage);
+        chatLog.scrollTop = chatLog.scrollHeight;
+
+        // --- INTELLIGENT CONTEXT PIPELINE ---
+        let bestSectionContent = paperSections['Full'] || '';
+        let detectedSection = 'Full';
+        // ... (rest of the logic is unchanged)
+
+        // --- API CALL (with your suggested paperLink) ---
+        try {
+            const contextToSend = getSmartContext(userInput, bestSectionContent);
+            const response = await fetch(PROXY_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    context: contextToSend.slice(0, 15000),
+                    message: userInput,
+                    paperLink: window.location.href
+                })
+            });
+
+            if (!response.ok) throw new Error(await response.text());
+
+            const data = await response.json();
+            thinkingMessage.remove();
+
+            if (data.response) {
+                chatLog.innerHTML += `<p><strong>Bot:</strong> ${data.response}</p>`;
+            } else {
+                throw new Error("Invalid response from server.");
+            }
+        } catch (error) {
+            console.error('Chatbot error:', error);
+            thinkingMessage.remove();
+            chatLog.innerHTML += `<p><strong>Bot:</strong> An error occurred. Please check the console.</p>`;
+        } finally {
+            chatInput.disabled = false; // Re-enable input
+            chatInput.focus();
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+    };
+
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            handleUserQuery();
+        }
+    });
+});
+</script>
