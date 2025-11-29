@@ -51,7 +51,7 @@ To democratize knowledge creation and become the most reliable, community-verifi
 1. **Fork the repository**
 2. **Clone it locally**
    ```bash
-   git clone https://github.com/zeural1/zeural1.git
+   git clone https://github.com/zeuraI/zeuralI.git
    cd zeural
    ```
 
