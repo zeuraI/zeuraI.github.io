@@ -13,7 +13,7 @@ layout: default
     </div>
 
     <ul class="lesson-list">
-      {% assign sorted_posts = site[page.course] | sort: 'title' %}
+      {% assign sorted_posts = site[page.course] | default: empty | sort: 'title' %}
       {% for post in sorted_posts %}
         <li>
           <a href="{{ post.url | relative_url }}" 
